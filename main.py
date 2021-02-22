@@ -41,6 +41,11 @@ def main():
     #
 
     #research questions
+    #Suggestions (Amandine) 
+    #1: Can customer segmentation support business decisions based on risky environments, such as, credit relationships with its customers?
+    #2: Can customer segmentation aid in managing demand and supply?
+    #3: Can customer segmentation reveal interactions and relations between customers and products?
+    #4: Can customer segmentation predict customer declines?
 
     #1. Predict customer retention, Customer makes purchase next year
     #customer return rate, any item in order
