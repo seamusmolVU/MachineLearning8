@@ -1,9 +1,11 @@
 
 import numpy as np
 import pandas as pd
-import time;
+import time
 import re
-from matplotlib import colors as mcolors;
+from matplotlib import colors as mcolors
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
 import xlrd
 import sklearn
 import matplotlib.pyplot as plt
@@ -37,12 +39,28 @@ def getCleanedData( yearData, fileName):
             data.append(i);
             if (int)(i[6]) not in customerIDs:
                 customerIDs.append(i[6]);
-        itemID = (int)(re.sub("[^0-9]", "", str(i[0])));
-        if itemID not in itemIDs:
+        itemID = str(i[0]);
+        if containsDigit( str(i[0])) and itemID not in itemIDs:
             itemIDs.append(itemID);
             itemDescriptions.append( ' '.join( [word for word in str(i[2]).replace("/"," ").split() if word.lower() not in mcolors.cnames.keys()]));
 
-    print(itemDescriptions)
+    #train K-Means model for item category classification
+    clusterCount = 8;
+    wordVectorizor = TfidfVectorizer(stop_words='english');
+    X = wordVectorizor.fit_transform(itemDescriptions);
+    model = KMeans( n_clusters=clusterCount, init='k-means++', max_iter=250, n_init=1);
+    model.fit(X);
+
+    print("Top terms per cluster:")
+    order_centroids = model.cluster_centers_.argsort()[:, ::-1]
+    terms = wordVectorizor.get_feature_names()
+    for i in range(clusterCount):
+        print("Cluster %d:" % i),
+        for ind in order_centroids[i, :10]:
+            print(' %s' % terms[ind]),
+        print
+
+    print("\n")
 
     #manually extracted postage costs
     #Manually create feature list for postage costs
@@ -55,17 +73,23 @@ def getCleanedData( yearData, fileName):
     customerAverageItemCost = np.array([0.0] * len(customerIDs));
     customerReturnRates = np.array([0.0] * len(customerIDs));
     customerOrderCount = np.array([0] * len(customerIDs));
+    customerItemCategory = np.array([0] * len(customerIDs));
 
     orderNumber = 0;
 
     for i in range(0, len(customerIDs)):
         customerOrderNumbers = [];
         customerReturnOrder = [];
+        customerItemCategories = [];
         for j in data:
             if j[6] == customerIDs[i]:
                 if not str(j[0]).startswith("C"):
                     customerQuantity[i] += j[3];
                     customerSubtotal[i] += j[5] * j[3];
+                    description = [' '.join( [word for word in str(j[2]).replace("/", " ") if word.lower() not in mcolors.cnames.keys() ])];
+                    itemDescriptionVector = wordVectorizor.transform(description);
+                    customerItemCategories.append(model.predict(itemDescriptionVector))
+
                     if j[0] not in customerOrderNumbers:
                         customerOrderNumbers.append(orderNumber);
                         customerPostage[i] = mediaPostageCosts[countryNames.index(j[7])];
@@ -76,12 +100,15 @@ def getCleanedData( yearData, fileName):
                     if orderNumber not in customerOrderNumbers:
                         customerQuantity[i] += abs( j[3]);
                         customerSubtotal[i] += abs(j[5]) * abs(j[3]);
+                        customerPostage[i] = mediaPostageCosts[countryNames.index(j[7])];
+                        description = [' '.join( [word for word in str(j[2]).replace("/", " ") if word.lower() not in mcolors.cnames.keys()])];
+
+                        itemDescriptionVector = wordVectorizor.transform(description);
+                        customerItemCategories.append(model.predict(itemDescriptionVector))
 
         for j in customerReturnOrder:
             if j not in customerOrderNumbers:
                 customerOrderNumbers.append( orderNumber);
-
-                #add orders where a return is present but no original order
 
         customerReturnRates[i] = len(customerReturnOrder) / len(customerOrderNumbers);
         customerOrderCount[i] = len(customerOrderNumbers);
