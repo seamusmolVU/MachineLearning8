@@ -4,12 +4,10 @@ import pandas as pd
 import time
 import re
 from matplotlib import colors as mcolors
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.cluster import KMeans
-import xlrd
-import sklearn
-import matplotlib.pyplot as plt
-from pandas import read_excel
+from sklearn.model_selection import train_test_split
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score
+from mlxtend.plotting import plot_decision_regions
 
 def containsDigit(string):
     for i in string:
@@ -17,8 +15,6 @@ def containsDigit(string):
             return True;
     return False;
 
-
-def getCategoryClassification():
 
 def getCleanedData( yearData, fileName):
 
@@ -163,7 +159,7 @@ def createCleanedModelData():
 
 def main():
 
-    needsDataCleaned = True;
+    needsDataCleaned = False;
 
     if needsDataCleaned:
         createCleanedModelData();
@@ -179,8 +175,22 @@ def main():
     print( f"Remaining Customers: " + str((retentionCount / float(len(year1)) * 100.0)) + "%");
     print( f"New Customers: " + str( len(year2) - len(customerRetention)) + "");
 
+    target = np.zeros( len(year1));
+    for i in range(0,len(target)):
+        if year1[i,1] in customerRetention:
+            target[i] = 1;
+
+    x_train, x_test, y_train, y_test = train_test_split(year1, target, test_size = 0.5);
+
+    #linear test
+    linear = SVC(kernel='linear')
+    linear.fit(x_train, y_train);
+    y_predicted = linear.predict(x_test)
 
 
+    print( accuracy_score(y_test, y_predicted));
+
+    #plot_decision_regions(x_test[:500], y_test.astype(np.integer)[:500], clf=linear, res=0.1);
 
 
 # Press the green button in the gutter to run the script.
