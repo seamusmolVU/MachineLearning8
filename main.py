@@ -18,6 +18,8 @@ def containsDigit(string):
     return False;
 
 
+def getCategoryClassification():
+
 def getCleanedData( yearData, fileName):
 
     countryNames =['United Kingdom', 'France', 'USA', 'Belgium', 'Australia', 'EIRE', 'Germany', 'Portugal', 'Japan', 'Denmark',
@@ -45,25 +47,22 @@ def getCleanedData( yearData, fileName):
             itemDescriptions.append( ' '.join( [word for word in str(i[2]).replace("/"," ").split() if word.lower() not in mcolors.cnames.keys()]));
 
     #train K-Means model for item category classification
-    clusterCount = 8;
-    wordVectorizor = TfidfVectorizer(stop_words='english');
-    X = wordVectorizor.fit_transform(itemDescriptions);
-    model = KMeans( n_clusters=clusterCount, init='k-means++', max_iter=250, n_init=1);
-    model.fit(X);
+    #clusterCount = 12;
+    #wordVectorizor = TfidfVectorizer(stop_words='english');
+    #X = wordVectorizor.fit_transform(itemDescriptions);
+    #model = KMeans( n_clusters=clusterCount, init='k-means++', max_iter=250, n_init=1);
+    #model.fit(X);
 
-    print("Top terms per cluster:")
-    order_centroids = model.cluster_centers_.argsort()[:, ::-1]
-    terms = wordVectorizor.get_feature_names()
-    for i in range(clusterCount):
-        print("Cluster %d:" % i),
-        for ind in order_centroids[i, :10]:
-            print(' %s' % terms[ind]),
-        print
+    #print("Top terms per cluster:")
+    #order_centroids = model.cluster_centers_.argsort()[:, ::-1]
+    #terms = wordVectorizor.get_feature_names()
+    #for i in range(clusterCount):
+    #    print("Cluster %d:" % i),
+    #    for ind in order_centroids[i, :10]:
+    #        print(' %s' % terms[ind]),
+    #    print
+    #print("\n")
 
-    print("\n")
-
-    #manually extracted postage costs
-    #Manually create feature list for postage costs
 
     customerPostage = np.array( [0] * len(customerIDs));
     customerQuantity = np.array([0] * len(customerIDs));
@@ -73,22 +72,22 @@ def getCleanedData( yearData, fileName):
     customerAverageItemCost = np.array([0.0] * len(customerIDs));
     customerReturnRates = np.array([0.0] * len(customerIDs));
     customerOrderCount = np.array([0] * len(customerIDs));
-    customerItemCategory = np.array([0] * len(customerIDs));
+    #customerItemCategory = np.array([0] * len(customerIDs));
 
     orderNumber = 0;
 
     for i in range(0, len(customerIDs)):
         customerOrderNumbers = [];
         customerReturnOrder = [];
-        customerItemCategories = [];
+        #customerItemCategories = [];
         for j in data:
             if j[6] == customerIDs[i]:
                 if not str(j[0]).startswith("C"):
                     customerQuantity[i] += j[3];
                     customerSubtotal[i] += j[5] * j[3];
-                    description = [' '.join( [word for word in str(j[2]).replace("/", " ") if word.lower() not in mcolors.cnames.keys() ])];
-                    itemDescriptionVector = wordVectorizor.transform(description);
-                    customerItemCategories.append(model.predict(itemDescriptionVector))
+                    #description = [' '.join( [word for word in str(j[2]).replace("/", " ") if word.lower() not in mcolors.cnames.keys() ])];
+                    #itemDescriptionVector = wordVectorizor.transform(description);
+                    #customerItemCategories.append(model.predict(itemDescriptionVector))
 
                     if j[0] not in customerOrderNumbers:
                         customerOrderNumbers.append(orderNumber);
@@ -101,10 +100,10 @@ def getCleanedData( yearData, fileName):
                         customerQuantity[i] += abs( j[3]);
                         customerSubtotal[i] += abs(j[5]) * abs(j[3]);
                         customerPostage[i] = mediaPostageCosts[countryNames.index(j[7])];
-                        description = [' '.join( [word for word in str(j[2]).replace("/", " ") if word.lower() not in mcolors.cnames.keys()])];
+                        #description = [' '.join( [word for word in str(j[2]).replace("/", " ") if word.lower() not in mcolors.cnames.keys()])];
 
-                        itemDescriptionVector = wordVectorizor.transform(description);
-                        customerItemCategories.append(model.predict(itemDescriptionVector))
+                        #itemDescriptionVector = wordVectorizor.transform(description);
+                        #customerItemCategories.append(model.predict(itemDescriptionVector))
 
         for j in customerReturnOrder:
             if j not in customerOrderNumbers:
@@ -116,11 +115,7 @@ def getCleanedData( yearData, fileName):
         customerAverageSubtotal[i] = customerSubtotal[i] / len(customerOrderNumbers);
         customerAverageItemCost[i] = customerSubtotal[i] / len(customerQuantity);
 
-
-
     dataSize = len(customerIDs);
-
-    #convert country to postage cost
 
     newData = np.asarray([
         customerIDs,
@@ -166,23 +161,6 @@ def createCleanedModelData():
     end = time.time();
     print(end - start);
 
-    # save array into csv file
-
-    #np.savetxt("2009.csv", clean1, delimiter=",")
-    #np.savetxt("2010.csv", clean2, delimiter=",")
-
-
-
-#customer return rate, any item in order X
-#postage cost / country X
-#total order quantity
-#total order subtotal
-#average order quantity X
-#average order subtotal X
-#average price of item in an order
-#number of orders
-#most common item category
-
 def main():
 
     needsDataCleaned = True;
@@ -194,10 +172,6 @@ def main():
     year1 = pd.read_excel(r'2009.xlsx', sheet_name='2009').to_numpy()
     year2 = pd.read_excel(r'2010.xlsx', sheet_name='2010').to_numpy()
 
-    #remove cost = 0
-    #remove stockCode without numbers
-    #remove non customer entries
-
     customerRetention = list( set(year1[:,1]) & set(year2[:,1]));
     retentionCount= float( len(customerRetention));
 
@@ -206,23 +180,8 @@ def main():
     print( f"New Customers: " + str( len(year2) - len(customerRetention)) + "");
 
 
-    # research questions
-    # Suggestions (Amandine)
-    # 1: Can customer segmentation support business decisions based on risky environments, such as, credit relationships with its customers?
-    # 2: Can customer segmentation aid in managing demand and supply?
-    # 3: Can customer segmentation reveal interactions and relations between customers and products?
-    # 4: Can customer segmentation predict customer declines?
 
-    # 1. Predict customer retention, Customer makes purchase next year
-    # customer return rate, any item in order
-    # postage cost
-    # average order quantity
-    # average order subtotal
-    # average price of item in an order
-    # number of orders
-    # most common item category
-    # most common time that orders are made
-    # most common day of the week that orders are made
+
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
