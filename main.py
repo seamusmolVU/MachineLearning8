@@ -1,4 +1,5 @@
 from concurrent.futures import thread
+from multiprocessing.pool import ThreadPool
 
 import numpy as np
 import pandas as pd
@@ -6,19 +7,23 @@ import time
 import threading
 import re
 from datetime import date
-import queue as queue
 from matplotlib import colors as mcolors
-from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.model_selection import train_test_split, cross_val_score, cross_val_predict
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score
-from concurrent.futures import ThreadPoolExecutor
-from mlxtend.plotting import plot_decision_regions
-
-from multiprocessing.dummy import Pool as ThreadPool
-
+from sklearn.metrics import accuracy_score, auc, confusion_matrix
+import numpy as np
+import sklearn
+import matplotlib.pyplot as plt
+from sklearn.model_selection import cross_val_predict
+from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import KFold
 from sklearn.tree import DecisionTreeClassifier
-
+from sklearn.model_selection import cross_val_predict
+from sklearn.metrics import confusion_matrix
+from sklearn.preprocessing import normalize
 
 def containsDigit(string):
     for i in string:
@@ -26,6 +31,9 @@ def containsDigit(string):
             return True;
     return False;
 
+def intToBooleans(number):
+   binaryString = format(number, '08b');
+   return [x == '1' for x in binaryString[::-1]];
 
 def getCleanedData( yearData, fileName):
 
@@ -81,8 +89,9 @@ def getCleanedData( yearData, fileName):
                         customerPostage[i] = mediaPostageCosts[countryNames.index(j[7])];
                         customerOrderDates.append(j[4]);
                 else:
-                    customerReturnOrders.append(j[0]);
-                    #customerOrderNumbers.append(j[0]);
+                    if j[0] not in customerReturnOrders:
+                        customerReturnOrders.append(j[0]);
+                        #customerOrderNumbers.append(j[0]);
 
         customerPostageCosts = []
         for j in yearData:
@@ -90,6 +99,7 @@ def getCleanedData( yearData, fileName):
                 customerPostage[i] += abs(j[3]);
         if len(customerPostageCosts) > 0:
             customerPostage[i] /= len(customerPostageCosts);
+
 
         if len(customerOrderDates) >= 2:
             for j in range(0,len(customerOrderDates)-1):
@@ -135,8 +145,8 @@ def createCleanedModelData():
     year1 = pd.read_excel(r'online_retail_II.xlsx', sheet_name='Year 2009-2010');
     year2 = pd.read_excel(r'online_retail_II.xlsx', sheet_name='Year 2010-2011');
 
-    year1.sort_values(by=["Customer ID","InvoiceDate"],ascending=False);
-    year2.sort_values(by=["Customer ID","InvoiceDate"],ascending=False);
+    year1.sort_values(by=["InvoiceDate"],ascending=True);
+    year2.sort_values(by=["InvoiceDate"],ascending=True);
 
     year1 = year1.to_numpy();
     year2 = year2.to_numpy();
@@ -152,17 +162,68 @@ def createCleanedModelData():
     end = time.time();
     print(end - start);
 
+def trainModels(data):
 
-def trainLinearModel( data ):
-    # index, dataSet, target
-    x_train, x_test, y_train, y_test = train_test_split(data[1], data[2], test_size=0.5);
-    # linear test
-    linear = SVC(kernel='linear')
-    linear.fit(x_train, y_train);
-    y_predicted = linear.predict(x_test)
+    #x_train, x_test, y_train, y_test = train_test_split(data[1], data[2], test_size=0.2);
 
-    print(str(data[0]) + str(accuracy_score(y_test, y_predicted)));
-    return (data[0], accuracy_score(y_test, y_predicted))
+    linear = SVC(kernel='linear',tol=0.025,probability=True)
+    poly = SVC(kernel='poly',tol=0.025,probability=True)
+    rbf = SVC(kernel='rbf',tol=0.025,probability=True)
+    sigmoid = SVC(kernel='sigmoid', tol=0.025, probability=True)
+    tree = DecisionTreeClassifier()
+    forest = RandomForestClassifier(n_estimators=100, min_samples_leaf=5, min_samples_split=10, random_state=0)
+    knn = KNeighborsClassifier(n_neighbors=25)
+
+    linearScores = cross_val_score(linear, data[1], data[2], cv=5, scoring='roc_auc')
+    polyScores = cross_val_score(poly, data[1], data[2], cv=5, scoring='roc_auc')
+    rbfScores = cross_val_score(rbf, data[1], data[2], cv=5, scoring='roc_auc')
+    sigmoidScores = cross_val_score(sigmoid, data[1], data[2], cv=5, scoring='roc_auc')
+    treeScores = cross_val_score(tree, data[1], data[2], cv=5, scoring='roc_auc')
+    forestScores = cross_val_score(forest, data[1], data[2], cv=5, scoring='roc_auc')
+    knnScores = cross_val_score(knn, data[1], data[2], cv=5, scoring='roc_auc')
+
+    linearPred = cross_val_predict(linear, data[1], data[2], cv=5)
+    polyPred = cross_val_predict(poly, data[1], data[2], cv=5)
+    rbfPred = cross_val_predict(rbf, data[1], data[2], cv=5)
+    sigmoidPred = cross_val_predict(sigmoid, data[1], data[2], cv=5)
+    treePred = cross_val_predict(tree, data[1], data[2], cv=5)
+    forestPred = cross_val_predict(forest, data[1], data[2], cv=5)
+    knnPred = cross_val_predict(knn, data[1], data[2], cv=5)
+
+    linearConf = confusion_matrix(data[2], linearPred)
+    polyConf = confusion_matrix(data[2], polyPred)
+    rbfConf = confusion_matrix(data[2], rbfPred)
+    sigmoidConf = confusion_matrix(data[2], sigmoidPred)
+    treeConf = confusion_matrix(data[2], treePred)
+    forestConf = confusion_matrix(data[2], forestPred)
+    knnConf = confusion_matrix(data[2], knnPred)
+
+    linearTN, linearFP, linearFN, linearTP = linearConf.ravel()
+    polyTN, polyFP, polyFN, polTP = polyConf.ravel()
+    rbfTN, rbfFP, rbfFN, rbfTP = rbfConf.ravel()
+    sigmoidTN, sigmoidFP, sigmoidFN, sigmoidTP = sigmoidConf.ravel()
+    treeTN, treeFP, treeFN, treeTP = treeConf.ravel()
+    forestTN, forestFP, forestFN, forestTP = forestConf.ravel()
+    knnTN, knnFP, knnFN, knnTP = knnConf.ravel()
+
+    linearAccuracy = accuracy_score(data[2], linearPred)
+    polyAccuracy = accuracy_score(data[2], polyPred)
+    rbfAccuracy = accuracy_score(data[2], rbfPred)
+    sigmoidAccuracy = accuracy_score(data[2], sigmoidPred)
+    treeAccuracy = accuracy_score(data[2], treePred)
+    forestAccuracy = accuracy_score(data[2], forestPred)
+    knnAccuracy = accuracy_score(data[2], knnPred)
+
+    linearRow = [data[0], linearAccuracy,np.mean(linearScores), linearTN, linearFP, linearFN, linearTP];
+    polyRow = [data[0],polyAccuracy,np.mean(polyScores),polyTN, polyFP, polyFN, polTP]
+    rbfRow = [data[0], rbfAccuracy,np.mean(rbfScores),rbfTN, rbfFP, rbfFN, rbfTP ]
+    sigmoidRow = [data[0], sigmoidAccuracy, np.mean(sigmoidScores),sigmoidTN, sigmoidFP, sigmoidFN, sigmoidTP]
+    treeRow = [data[0], treeAccuracy,np.mean(treeScores), treeTN, treeFP, treeFN, treeTP]
+    forestRow = [data[0], forestAccuracy,np.mean(forestScores), forestTN, forestFP, forestFN, forestTP]
+    knnRow = [data[0], knnAccuracy,np.mean(knnScores), knnTN, knnFP, knnFN, knnTP]
+
+    return [linearRow,polyRow,rbfRow,sigmoidRow,treeRow,forestRow,knnRow]
+
 
 def main():
 
@@ -187,69 +248,103 @@ def main():
         if year1[i,1] in customerRetention:
             target[i] = 1;
 
-    dataSet = year1[:,3:10];
-    linearResults = queue.Queue();
 
-    """"
     pool = ThreadPool(16)
     permutations = [];
-    for i in range(0, 512):
+    for i in range(1, 16):
         permutation = []
-        if i % 1 == 0:
+        test = intToBooleans(i)
+        binaryString = ""
+
+        if test[0]:
             permutation.append( year1[:,3])
-        if i % 2 == 0:
+            binaryString += "1"
+        else:
+            binaryString += "0"
+        if test[1]:
             permutation.append( year1[:, 4])
-        if i % 4 == 0:
+            binaryString += "1"
+        else:
+            binaryString += "0"
+        if test[2]:
             permutation.append( year1[:,5])
-        if i % 8 == 0:
-            permutation.append( year1[:,6])
-        if i % 16 == 0:
+            binaryString += "1"
+        else:
+            binaryString += "0"
+        if test[3]:
+            permutation.append(  year1[:,6])
+            binaryString += "1"
+        else:
+            binaryString += "0"
+        if test[4]:
             permutation.append( year1[:,7])
-        if i % 32 == 0:
-            permutation.append( year1[:, 8])
-        if i % 64 == 0:
-            permutation.append( year1[:, 9])
-        if i % 128 == 0:
+            binaryString += "1"
+        else:
+            binaryString += "0"
+        if test[5]:
+            permutation.append(year1[:,8])
+            binaryString += "1"
+        else:
+            binaryString += "0"
+        if test[6]:
+            permutation.append( year1[:,9])
+            binaryString += "1"
+        else:
+            binaryString += "0"
+        if test[7]:
             permutation.append( year1[:,10])
+            binaryString += "1"
+        else:
+            binaryString += "0"
 
-        permutation = np.asarray(permutation).transpose();
+        permutation = normalize(permutation, axis=0, norm='max').transpose();
+        permutations.append( (binaryString[::-1],permutation,target));
 
-        permutations.append( (i,permutation,target));
-
-    results = pool.map( trainLinearModel, permutations);
+    results = pool.map( trainModels, permutations);
     pool.close()
     pool.join()
 
-    for i in results:
-        print(i);
+    names = [];
+    indices = []
+    accuracies = []
+    aucs = []
+    tn = []
+    fp = []
+    fn = []
+    tp = []
 
-    """
+    #data[0], knnAccuracy, knnTN, knnFP, knnFN, knnTP
+    classifierNames = ['linear','poly','rbf','sigmoid','tree','forest','knn']
 
-    # index, dataSet, target
-    x_train, x_test, y_train, y_test = train_test_split(dataSet, target, test_size=0.5);
-    # linear test
-    linear = SVC(kernel='linear')
-    linear.fit(x_train, y_train);
-    y_predicted = linear.predict(x_test)
+    for i in range(0, len(results)):
+        for j in range(0,len(results[i])):
+            for k in range(0,7):
+                names.append(classifierNames[k])
+                indices.append(results[i][j][0])
+                accuracies.append(results[i][j][1])
+                aucs.append(results[i][j][2])
+                tn.append(results[i][j][3])
+                fp.append(results[i][j][4])
+                fn.append(results[i][j][5])
+                tp.append(results[i][j][6])
 
-    print( accuracy_score(y_test, y_predicted));
-    #plot_decision_regions(x_test[:500], y_test.astype(np.integer)[:500], clf=linear, res=0.1);
+    newData = np.asarray( [
+        np.asarray(names),
+        np.asarray(indices),
+        np.asarray(accuracies),
+        np.asarray(aucs ),
+        np.asarray(tn ),
+        np.asarray(fp),
+        np.asarray(fn),
+        np.asarray(tp)]);
 
-    tree = DecisionTreeClassifier()
-    tree.fit(x_train, y_train)
+    data_df = pd.DataFrame(newData.transpose())
 
-    y_predicted = tree.predict(x_test)
-    print(accuracy_score(y_test, y_predicted))
+    data_df.columns = ['Classifier','Index','Accuracy','AUC','TN', 'FP','FN','TP'];
 
-    knn = KNeighborsClassifier(15)  # We set the number of neighbors to 15
-    knn.fit(x_train, y_train)
-
-    y_predicted = knn.predict(x_test)
-    print('accuracy ', accuracy_score(y_test, y_predicted))
-
-
-    #plot_decision_regions(x_test[:500], y_test.astype(np.integer)[:500], clf=linear, res=0.1);
-
+    writer = pd.ExcelWriter("TrainingData3.xlsx")
+    data_df.to_excel(writer, "Training Data3", float_format='%.5f')
+    writer.save();
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
