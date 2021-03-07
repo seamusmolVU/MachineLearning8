@@ -32,8 +32,10 @@ def containsDigit(string):
     return False;
 
 def intToBooleans(number):
-   binaryString = format(number, '08b');
+   binaryString = format(number, '12b');
    return [x == '1' for x in binaryString[::-1]];
+
+
 
 def getCleanedData( yearData, fileName):
 
@@ -46,38 +48,34 @@ def getCleanedData( yearData, fileName):
     mediaPostageCosts =[5.0,18.0,135.5,15.0,305.0,25.0,18.0,28.0,180.0,20.0,75.0,15.0,40.0,28.0,20.0,28.0,15.0,50.0,40.0,40.0,
      40.0,37.5,40.0,40.0,52.5,40.0,150.0,130.0,160.0,170.0,170.0,45.0,40.0,130.0, 39.67,180.0,170.0,130.0,40.0]
 
-    itemIDs = []
-    itemDescriptions = []
-
     data = []
     customerIDs = [];
     for i in yearData:
-        if i[5] > 0.0 and i[7] in countryNames and not np.isnan( i[6]) and containsDigit( str(i[1])):
+        if i[5] > 0.0 and i[7] in countryNames and not np.isnan(i[6]) and containsDigit(str(i[1])):
             data.append(i);
-            if (int)(i[6]) not in customerIDs and i[3] > 0:
+            if (int)(i[6]) not in customerIDs and i[3] != 0:
                 customerIDs.append(i[6]);
-        itemID = str(i[0]);
-        if containsDigit( str(i[0])) and itemID not in itemIDs:
-            itemIDs.append(itemID);
-            itemDescriptions.append( ' '.join( [word for word in str(i[2]).replace("/"," ").split() if word.lower() not in mcolors.cnames.keys()]));
 
-    customerPostage = np.array( [0.0] * len(customerIDs));
-    customerQuantity = np.array([0.0] * len(customerIDs));
-    customerSubtotal = np.array([0.0] * len(customerIDs));
-    customerAverageQuantity = np.array([0.0] * len(customerIDs));
-    customerAverageSubtotal = np.array([0.0] * len(customerIDs));
-    customerAverageItemCost = np.array([0.0] * len(customerIDs));
-    customerReturnRates = np.array([0.0] * len(customerIDs));
-    customerOrderCount = np.array([0.0] * len(customerIDs));
-    customerRecency = np.array([0.0] * len(customerIDs));
-    orderNumber = 0;
+    customerPostage = [0.0] * len(customerIDs);
+    customerQuantity = [0.0] * len(customerIDs);
+    customerSubtotal = [0.0] * len(customerIDs);
+    customerAverageQuantity =[0.0] * len(customerIDs);
+    customerAverageSubtotal = [0.0] * len(customerIDs);
+    customerAverageItemCost = [0.0] * len(customerIDs);
+    customerReturnRates = [0.0] * len(customerIDs);
+    customerReturnCost = [0.0] * len(customerIDs);
+    customerReturnQuantity = [0.0] * len(customerIDs);
+    customerReturnQuantityPercentage = [0.0] * len(customerIDs);
+    customerReturnCostPercentage = [0.0] * len(customerIDs);
+    customerOrderCount = [0.0] * len(customerIDs);
+    customerRecency = [0.0] * len(customerIDs);
 
     for i in range(0, len(customerIDs)):
         customerOrderNumbers = [];
         customerOrderDates = [];
         customerReturnOrders = [];
 
-        #return order is not same ID as purchase order
+        # return order is not same ID as purchase order
         for j in data:
             if j[6] == customerIDs[i]:
                 if not str(j[0]).startswith("C"):
@@ -85,55 +83,76 @@ def getCleanedData( yearData, fileName):
                     customerSubtotal[i] += j[5] * j[3];
 
                     if j[0] not in customerOrderNumbers:
-                        customerOrderNumbers.append(orderNumber);
+                        customerOrderNumbers.append(j[0]);
                         customerPostage[i] = mediaPostageCosts[countryNames.index(j[7])];
                         customerOrderDates.append(j[4]);
-                else:
+
+                elif str(j[0]).startswith("C"):
+                    customerReturnQuantity[i] += abs(j[3]);
+                    customerReturnCost[i] += abs(j[5]) * abs(j[3]);
+
                     if j[0] not in customerReturnOrders:
                         customerReturnOrders.append(j[0]);
-                        #customerOrderNumbers.append(j[0]);
+                        # customerOrderNumbers.append(j[0]);
 
         customerPostageCosts = []
         for j in yearData:
             if j[6] == customerIDs[i] and str(j[1]).startswith("POST"):
-                customerPostage[i] += abs(j[3]);
+                customerPostage[i] += np.abs(j[3]);
         if len(customerPostageCosts) > 0:
             customerPostage[i] /= len(customerPostageCosts);
 
-
         if len(customerOrderDates) >= 2:
-            for j in range(0,len(customerOrderDates)-1):
-                daysDelta = (customerOrderDates[j+1].to_pydatetime() - customerOrderDates[j].to_pydatetime()).days;
+            for j in range(0, len(customerOrderDates) - 1):
+                daysDelta = (customerOrderDates[j + 1].to_pydatetime() - customerOrderDates[j].to_pydatetime()).days;
                 customerRecency[i] = customerRecency[i] + daysDelta;
-            customerRecency[i] = customerRecency[i] / (len(customerOrderDates)-1);
+            customerRecency[i] = customerRecency[i] / (len(customerOrderDates) - 1);
         else:
             customerRecency[i] = 366;
 
-        customerReturnRates[i] = len(customerReturnOrders) / len(customerOrderNumbers);
-        customerOrderCount[i] = len(customerOrderNumbers);
-        customerAverageQuantity[i] = customerQuantity[i] / len(customerOrderNumbers);
-        customerAverageSubtotal[i] = customerSubtotal[i] / len(customerOrderNumbers);
-        customerAverageItemCost[i] = customerSubtotal[i] / len(customerQuantity);
+        customerOrderCount[i] = len(customerOrderNumbers)
 
-    dataSize = len(customerIDs);
+        if len(customerOrderNumbers) > 0:
+            customerReturnRates[i] = float(len(customerReturnOrders)) / float(len(customerOrderNumbers));
+            customerOrderCount[i] = float(len(customerOrderNumbers));
+            customerAverageQuantity[i] = customerQuantity[i] / float(len(customerOrderNumbers));
+            customerAverageSubtotal[i] = customerSubtotal[i] / float(len(customerOrderNumbers));
+            customerAverageItemCost[i] = customerSubtotal[i] / float(len(customerQuantity));
+
+            customerReturnQuantityPercentage[i] = customerReturnQuantity[i] / customerQuantity[i];
+            customerReturnCostPercentage[i] = customerReturnCost[i] / customerSubtotal[i] if customerSubtotal[i] > 0 else 0;
+
+        else:
+            customerReturnRates[i] = 1.0;
+            customerOrderCount[i] = float(len(customerReturnOrders));
+            customerAverageQuantity[i] = customerReturnQuantity[i] / float(len(customerReturnOrders));
+            customerAverageSubtotal[i] = customerReturnCost[i] / float(len(customerReturnOrders));
+            customerAverageItemCost[i] = customerReturnCost[i] / customerReturnQuantity[i];
+
+            customerReturnQuantityPercentage[i] = 1.0;
+            customerReturnCostPercentage[i] = 1.0;
 
     newData = np.asarray([
-        customerIDs,
-        customerPostage,
-        customerQuantity,
-        customerSubtotal,
-        customerAverageQuantity,
-        customerAverageSubtotal,
-        customerAverageItemCost,
-        customerReturnRates,
-        customerOrderCount,
-        customerRecency]);
+        np.asarray(customerIDs),
+        np.asarray(customerPostage),
+        np.asarray(customerQuantity),
+        np.asarray(customerSubtotal),
+        np.asarray(customerAverageQuantity),
+        np.asarray(customerAverageSubtotal),
+        np.asarray(customerAverageItemCost),
+        np.asarray(customerReturnRates),
+        np.asarray(customerReturnCost),
+        np.asarray(customerReturnQuantity),
+        np.asarray(customerReturnQuantityPercentage),
+        np.asarray(customerReturnCostPercentage),
+        np.asarray(customerOrderCount),
+        np.asarray(customerRecency)]);
 
     data_df = pd.DataFrame(newData.transpose())  # Key 1, Convert ndarray format to DataFrame
 
     # Change the index of the table
     data_df.columns = ['CustomerID', 'Postage', 'Quantity', 'Subtotal', 'Average Quantity','Average Subtotal',
-                       'Average Item Cost', 'Order Return Rate', 'OrderCount','Recency'];
+                       'Average Item Cost', 'Order Return Rate','Return Cost','Return Quantity','Return Quantity Percentage','Return Cost Percentage', 'OrderCount','Recency'];
 
     # Write the file into the excel table
     writer = pd.ExcelWriter(fileName + '.xlsx')
@@ -158,21 +177,19 @@ def createCleanedModelData():
 
     start = time.time();
     getCleanedData(year1,"2009");
-    getCleanedData(year2,"2010");
+    #getCleanedData(year2,"2010");
     end = time.time();
     print(end - start);
 
 def trainModels(data):
 
-    #x_train, x_test, y_train, y_test = train_test_split(data[1], data[2], test_size=0.2);
-
-    linear = SVC(kernel='linear',tol=0.025,probability=True)
-    poly = SVC(kernel='poly',tol=0.025,probability=True)
-    rbf = SVC(kernel='rbf',tol=0.025,probability=True)
-    sigmoid = SVC(kernel='sigmoid', tol=0.025, probability=True)
+    linear = SVC(kernel='linear', cache_size=1000,max_iter= 10000000, probability=True)
+    poly = SVC(kernel='poly',cache_size=1000,max_iter= 10000000,probability=True)
+    rbf = SVC(kernel='rbf',cache_size=1000,max_iter= 10000000,probability=True)
+    sigmoid = SVC(kernel='sigmoid',cache_size=1000,max_iter= 10000000, probability=True)
     tree = DecisionTreeClassifier()
-    forest = RandomForestClassifier(n_estimators=100, min_samples_leaf=5, min_samples_split=10, random_state=0)
-    knn = KNeighborsClassifier(n_neighbors=25)
+    forest = RandomForestClassifier(n_estimators=150,min_samples_split=20,min_samples_leaf=10)
+    knn = KNeighborsClassifier(n_neighbors=59)
 
     linearScores = cross_val_score(linear, data[1], data[2], cv=5, scoring='roc_auc')
     polyScores = cross_val_score(poly, data[1], data[2], cv=5, scoring='roc_auc')
@@ -236,69 +253,101 @@ def main():
     year1 = pd.read_excel(r'2009.xlsx', sheet_name='2009').to_numpy()
     year2 = pd.read_excel(r'2010.xlsx', sheet_name='2010').to_numpy()
 
-    customerRetention = list( set(year1[:,1]) & set(year2[:,1]));
-    retentionCount= float( len(customerRetention));
+    target = [];
+    retention = [];
+    for i in year1:
+        if i[1] in year2[:,1]:
+            retention.append(i[1]);
+            target.append(1);
+        else:
+            target.append(0);
+
+    for i in range(0,len(year1)):
+        if year1[i,1] in year2:
+            target[i] = 1;
+
+    retentionCount= float( len(retention));
 
     print( f"Remaining Customers: " + str(retentionCount));
     print( f"Remaining Customers: " + str((retentionCount / float(len(year1)) * 100.0)) + "%");
-    print( f"New Customers: " + str( len(year2) - len(customerRetention)) + "");
+    print( f"New Customers: " + str( len(year2) - len(retention)) + "");
 
-    target = np.zeros( len(year1));
-    for i in range(0,len(target)):
-        if year1[i,1] in customerRetention:
-            target[i] = 1;
+    scaler = MinMaxScaler()
 
+    dataSet = year1[:,3:15];
+    scaler.fit(dataSet);
 
     pool = ThreadPool(16)
     permutations = [];
-    for i in range(1, 16):
+    for i in range(1, 4096):
         permutation = []
         test = intToBooleans(i)
         binaryString = ""
 
         if test[0]:
-            permutation.append( year1[:,3])
+            permutation.append( dataSet[:,0])
             binaryString += "1"
         else:
             binaryString += "0"
         if test[1]:
-            permutation.append( year1[:, 4])
+            permutation.append( dataSet[:,1])
             binaryString += "1"
         else:
             binaryString += "0"
         if test[2]:
-            permutation.append( year1[:,5])
+            permutation.append( dataSet[:,2])
             binaryString += "1"
         else:
             binaryString += "0"
         if test[3]:
-            permutation.append(  year1[:,6])
+            permutation.append(  dataSet[:,3])
             binaryString += "1"
         else:
             binaryString += "0"
         if test[4]:
-            permutation.append( year1[:,7])
+            permutation.append( dataSet[:,4])
             binaryString += "1"
         else:
             binaryString += "0"
         if test[5]:
-            permutation.append(year1[:,8])
+            permutation.append( dataSet[:,5])
             binaryString += "1"
         else:
             binaryString += "0"
         if test[6]:
-            permutation.append( year1[:,9])
+            permutation.append( dataSet[:,6])
             binaryString += "1"
         else:
             binaryString += "0"
         if test[7]:
-            permutation.append( year1[:,10])
+            permutation.append( dataSet[:,7])
+            binaryString += "1"
+        else:
+            binaryString += "0"
+        if test[8]:
+            permutation.append(dataSet[:, 8])
+            binaryString += "1"
+        else:
+            binaryString += "0"
+        if test[9]:
+            permutation.append(dataSet[:, 9])
+            binaryString += "1"
+        else:
+            binaryString += "0"
+        if test[10]:
+            permutation.append(dataSet[:, 10])
+            binaryString += "1"
+        else:
+            binaryString += "0"
+        if test[11]:
+            permutation.append(dataSet[:, 11])
             binaryString += "1"
         else:
             binaryString += "0"
 
         permutation = normalize(permutation, axis=0, norm='max').transpose();
         permutations.append( (binaryString[::-1],permutation,target));
+
 
     results = pool.map( trainModels, permutations);
     pool.close()
@@ -318,15 +367,14 @@ def main():
 
     for i in range(0, len(results)):
         for j in range(0,len(results[i])):
-            for k in range(0,7):
-                names.append(classifierNames[k])
-                indices.append(results[i][j][0])
-                accuracies.append(results[i][j][1])
-                aucs.append(results[i][j][2])
-                tn.append(results[i][j][3])
-                fp.append(results[i][j][4])
-                fn.append(results[i][j][5])
-                tp.append(results[i][j][6])
+            names.append(classifierNames[j])
+            indices.append(results[i][j][0])
+            accuracies.append(results[i][j][1])
+            aucs.append(results[i][j][2])
+            tn.append(results[i][j][3])
+            fp.append(results[i][j][4])
+            fn.append(results[i][j][5])
+            tp.append(results[i][j][6])
 
     newData = np.asarray( [
         np.asarray(names),
@@ -342,8 +390,8 @@ def main():
 
     data_df.columns = ['Classifier','Index','Accuracy','AUC','TN', 'FP','FN','TP'];
 
-    writer = pd.ExcelWriter("TrainingData3.xlsx")
-    data_df.to_excel(writer, "Training Data3", float_format='%.5f')
+    writer = pd.ExcelWriter("TrainingData2.xlsx")
+    data_df.to_excel(writer, "Training Data", float_format='%.5f')
     writer.save();
 
 # Press the green button in the gutter to run the script.
