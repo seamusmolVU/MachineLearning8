@@ -177,7 +177,7 @@ def createCleanedModelData():
 
     start = time.time();
     getCleanedData(year1,"2009");
-    #getCleanedData(year2,"2010");
+    getCleanedData(year2,"2010");
     end = time.time();
     print(end - start);
 
