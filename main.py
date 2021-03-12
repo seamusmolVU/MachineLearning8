@@ -3,20 +3,42 @@ from multiprocessing.pool import ThreadPool
 import pandas as pd
 import time
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, roc_auc_score
 import numpy as np
 import sklearn
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.model_selection import cross_val_predict
 from sklearn.metrics import confusion_matrix
 from sklearn.preprocessing import normalize
 
-#TODO Summary of project
-#
+# This project consists of several components:
+# The project loads customers segmentation data of individual transactions and creates in return an excel sheet
+# containing a dataset of valid customers with the following features:
+# Postage
+# Quantity
+# Subtotal
+# Average Quantity
+# Average Subtotal
+# Average Item Cost
+# Order Return Rate
+# Return Cost
+# Return Quantity
+# Return Quantity Percentage
+# Return Cost Percentage
+# OrderCount
+# Recency
+
+# Next the intersection of the first year and second year datasets are used to obtain the retention of customers.
+# The first year and retention datasets are used to conduct Feature selection.
+# This consists of running everyone combination of the features(except for postage due to 99% class imbalance)
+
+# The 16 optimal feature combinations are used for hyperparameter tuning.
+# The data is broken into 60%,20%,20% for training,validation,testing
+# Hypermeter tuning uses training and tests on validation
+# The final run uses training+validation and tests on the test data.
 
 def containsDigit(string):
     for i in string:
@@ -175,6 +197,14 @@ def createCleanedModelData():
 
 def trainModels(data):
 
+    # Split into 60% 20% 20% training,validation,test sets
+
+    # split into test and train
+    x_train, x_test, y_train, y_test = train_test_split(data[1], data[2], test_size=0.2, random_state=1)
+
+    # split into train and validation
+    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.25, random_state=1)
+
     linear = SVC(kernel='linear', cache_size=1000,max_iter= 10000000, probability=True)
     poly = SVC(kernel='poly',cache_size=1000,max_iter= 10000000,probability=True)
     rbf = SVC(kernel='rbf',cache_size=1000,max_iter= 10000000,probability=True)
@@ -183,37 +213,45 @@ def trainModels(data):
     forest = RandomForestClassifier(n_estimators=150,min_samples_split=20,min_samples_leaf=10)
     knn = KNeighborsClassifier(n_neighbors=59)
 
-    linearScores = cross_val_score(linear, data[1], data[2], cv=5, scoring='roc_auc')
-    polyScores = cross_val_score(poly, data[1], data[2], cv=5, scoring='roc_auc')
-    rbfScores = cross_val_score(rbf, data[1], data[2], cv=5, scoring='roc_auc')
-    sigmoidScores = cross_val_score(sigmoid, data[1], data[2], cv=5, scoring='roc_auc')
-    treeScores = cross_val_score(tree, data[1], data[2], cv=5, scoring='roc_auc')
-    forestScores = cross_val_score(forest, data[1], data[2], cv=5, scoring='roc_auc')
-    knnScores = cross_val_score(knn, data[1], data[2], cv=5, scoring='roc_auc')
+    linear.fit(x_train, y_train)
+    poly.fit(x_train, y_train)
+    rbf.fit(x_train, y_train)
+    sigmoid.fit(x_train, y_train)
+    tree.fit(x_train, y_train)
+    forest.fit(x_train, y_train)
+    knn.fit(x_train, y_train)
 
-    linearPred = cross_val_predict(linear, data[1], data[2], cv=5)
-    polyPred = cross_val_predict(poly, data[1], data[2], cv=5)
-    rbfPred = cross_val_predict(rbf, data[1], data[2], cv=5)
-    sigmoidPred = cross_val_predict(sigmoid, data[1], data[2], cv=5)
-    treePred = cross_val_predict(tree, data[1], data[2], cv=5)
-    forestPred = cross_val_predict(forest, data[1], data[2], cv=5)
-    knnPred = cross_val_predict(knn, data[1], data[2], cv=5)
+    linearScores = roc_auc_score(y_val, linear.predict_proba(x_val)[:,1]);
+    polyScores = roc_auc_score(y_val, poly.predict_proba(x_val)[:,1]);
+    rbfScores = roc_auc_score(y_val, rbf.predict_proba(x_val)[:,1]);
+    sigmoidScores = roc_auc_score(y_val, sigmoid.predict_proba(x_val)[:,1]);
+    treeScores = roc_auc_score(y_val, tree.predict_proba(x_val)[:,1]);
+    forestScores = roc_auc_score(y_val, forest.predict_proba(x_val)[:,1]);
+    knnScores = roc_auc_score(y_val, knn.predict_proba(x_val)[:,1]);
 
-    linearTN, linearFP, linearFN, linearTP = confusion_matrix(data[2], linearPred).ravel()
-    polyTN, polyFP, polyFN, polTP = confusion_matrix(data[2], polyPred).ravel()
-    rbfTN, rbfFP, rbfFN, rbfTP = confusion_matrix(data[2], rbfPred).ravel()
-    sigmoidTN, sigmoidFP, sigmoidFN, sigmoidTP = confusion_matrix(data[2], sigmoidPred).ravel()
-    treeTN, treeFP, treeFN, treeTP = confusion_matrix(data[2], treePred).ravel()
-    forestTN, forestFP, forestFN, forestTP = confusion_matrix(data[2], forestPred).ravel()
-    knnTN, knnFP, knnFN, knnTP = confusion_matrix(data[2], knnPred).ravel()
+    linearPred = linear.predict(x_val)
+    polyPred = poly.predict(x_val)
+    rbfPred = rbf.predict(x_val)
+    sigmoidPred = sigmoid.predict(x_val)
+    treePred = tree.predict(x_val)
+    forestPred = forest.predict(x_val)
+    knnPred = knn.predict(x_val)
 
-    linearAccuracy = accuracy_score(data[2], linearPred)
-    polyAccuracy = accuracy_score(data[2], polyPred)
-    rbfAccuracy = accuracy_score(data[2], rbfPred)
-    sigmoidAccuracy = accuracy_score(data[2], sigmoidPred)
-    treeAccuracy = accuracy_score(data[2], treePred)
-    forestAccuracy = accuracy_score(data[2], forestPred)
-    knnAccuracy = accuracy_score(data[2], knnPred)
+    linearTN, linearFP, linearFN, linearTP = confusion_matrix(y_val, linearPred).ravel()
+    polyTN, polyFP, polyFN, polTP = confusion_matrix(y_val, polyPred).ravel()
+    rbfTN, rbfFP, rbfFN, rbfTP = confusion_matrix(y_val, rbfPred).ravel()
+    sigmoidTN, sigmoidFP, sigmoidFN, sigmoidTP = confusion_matrix(y_val, sigmoidPred).ravel()
+    treeTN, treeFP, treeFN, treeTP = confusion_matrix(y_val, treePred).ravel()
+    forestTN, forestFP, forestFN, forestTP = confusion_matrix(y_val, forestPred).ravel()
+    knnTN, knnFP, knnFN, knnTP = confusion_matrix(y_val, knnPred).ravel()
+
+    linearAccuracy = accuracy_score(y_val, linearPred)
+    polyAccuracy = accuracy_score(y_val, polyPred)
+    rbfAccuracy = accuracy_score(y_val, rbfPred)
+    sigmoidAccuracy = accuracy_score(y_val, sigmoidPred)
+    treeAccuracy = accuracy_score(y_val, treePred)
+    forestAccuracy = accuracy_score(y_val, forestPred)
+    knnAccuracy = accuracy_score(y_val, knnPred)
 
     linearRow = [data[0], linearAccuracy,np.mean(linearScores), linearTN, linearFP, linearFN, linearTP];
     polyRow = [data[0],polyAccuracy,np.mean(polyScores),polyTN, polyFP, polyFN, polTP]
@@ -226,9 +264,11 @@ def trainModels(data):
     return [linearRow,polyRow,rbfRow,sigmoidRow,treeRow,forestRow,knnRow]
 
 
-def tuneModels(data):
-    # Split data into 80% train, 20% test
-    x_train, x_test, y_train, y_test = train_test_split(data[1], data[2], test_size= 0.2)
+def tuneModelsAndGetFinalRun(data):
+    # Split data into 60% train,20% validation, 20% test
+    # split into test and train
+    x_whole_train, x_test, y_whole_train, y_test = train_test_split( data[1], data[2], test_size=0.2, random_state=1)
+    x_train, x_val, y_train, y_val = train_test_split(x_whole_train, y_whole_train, test_size=0.25, random_state=1)
 
     # Create normal Models
     linear = SVC(kernel='linear', cache_size=1000, max_iter=10000000, probability=True)
@@ -237,107 +277,140 @@ def tuneModels(data):
     sigmoid = SVC(kernel='sigmoid', cache_size=1000, max_iter=10000000, probability=True)
     tree = DecisionTreeClassifier()
     forest = RandomForestClassifier(n_estimators=150, min_samples_split=20, min_samples_leaf=10)
-    knn = KNeighborsClassifier(n_neighbors=59)
+    knn = KNeighborsClassifier(n_neighbors= 59)
 
-    # Obtain AUC score using 5 fold validation on Test data.
-    linearScores = cross_val_score(linear, x_train, y_train, cv=5, scoring='roc_auc')
-    polyScores = cross_val_score(poly, x_train, y_train, cv=5, scoring='roc_auc')
-    rbfScores = cross_val_score(rbf, x_train, y_train, cv=5, scoring='roc_auc')
-    sigmoidScores = cross_val_score(sigmoid, x_train, y_train, cv=5, scoring='roc_auc')
-    treeScores = cross_val_score(tree, x_train, y_train, cv=5, scoring='roc_auc')
-    forestScores = cross_val_score(forest, x_train, y_train, cv=5, scoring='roc_auc')
-    knnScores = cross_val_score(knn, x_train, y_train, cv=5, scoring='roc_auc')
+    linear.fit(x_train, y_train)
+    poly.fit(x_train, y_train)
+    rbf.fit(x_train, y_train)
+    sigmoid.fit(x_train, y_train)
+    tree.fit(x_train, y_train)
+    forest.fit(x_train, y_train)
+    knn.fit(x_train, y_train)
 
-    # Predict using normal models
-    linearPred = linear.predict(x_test);
-    polyPred = poly.predict(x_test);
-    rbfPred = rbf.predict(x_test);
-    sigmoidPred = sigmoid.predict(x_test);
-    treePred = tree.predict(x_test);
-    forestPred = forest.predict(x_test);
-    knnPred = knn.predict(x_test);
+    linearPred = linear.predict(x_val)
+    polyPred = poly.predict(x_val)
+    rbfPred = rbf.predict(x_val)
+    sigmoidPred = sigmoid.predict(x_val)
+    treePred = tree.predict(x_val)
+    forestPred = forest.predict(x_val)
+    knnPred = knn.predict(x_val)
+
+    # Obtain AUC score
+    linearScores = roc_auc_score (y_val, linear.predict_proba(x_val)[:,1]);
+    polyScores = roc_auc_score (y_val, poly.predict_proba(x_val)[:,1]);
+    rbfScores = roc_auc_score (y_val, rbf.predict_proba(x_val)[:,1]);
+    sigmoidScores = roc_auc_score (y_val, sigmoid.predict_proba(x_val)[:,1]);
+    treeScores = roc_auc_score (y_val, tree.predict_proba(x_val)[:,1]);
+    forestScores = roc_auc_score (y_val, forest.predict_proba(x_val)[:,1]);
+    knnScores = roc_auc_score (y_val, knn.predict_proba(x_val)[:,1]);
 
     # Get ROC for all normal models
-    linearTN, linearFP, linearFN, linearTP = confusion_matrix(y_test, linearPred).ravel()
-    polyTN, polyFP, polyFN, polTP = confusion_matrix(y_test, polyPred).ravel()
-    rbfTN, rbfFP, rbfFN, rbfTP = confusion_matrix(y_test, rbfPred).ravel()
-    sigmoidTN, sigmoidFP, sigmoidFN, sigmoidTP = confusion_matrix(y_test, sigmoidPred).ravel()
-    treeTN, treeFP, treeFN, treeTP = confusion_matrix(y_test, treePred).ravel()
-    forestTN, forestFP, forestFN, forestTP = confusion_matrix(y_test, forestPred).ravel()
-    knnTN, knnFP, knnFN, knnTP = confusion_matrix(y_test, knnPred).ravel()
+    linearTN, linearFP, linearFN, linearTP = confusion_matrix(y_val, linearPred).ravel()
+    polyTN, polyFP, polyFN, polTP = confusion_matrix(y_val, polyPred).ravel()
+    rbfTN, rbfFP, rbfFN, rbfTP = confusion_matrix(y_val, rbfPred).ravel()
+    sigmoidTN, sigmoidFP, sigmoidFN, sigmoidTP = confusion_matrix(y_val, sigmoidPred).ravel()
+    treeTN, treeFP, treeFN, treeTP = confusion_matrix(y_val, treePred).ravel()
+    forestTN, forestFP, forestFN, forestTP = confusion_matrix(y_val, forestPred).ravel()
+    knnTN, knnFP, knnFN, knnTP = confusion_matrix(y_val, knnPred).ravel()
 
     # Get normal models
-    linearAccuracy = accuracy_score(y_test, linearPred)
-    polyAccuracy = accuracy_score(y_test, polyPred)
-    rbfAccuracy = accuracy_score(y_test, rbfPred)
-    sigmoidAccuracy = accuracy_score(y_test, sigmoidPred)
-    treeAccuracy = accuracy_score(y_test, treePred)
-    forestAccuracy = accuracy_score(y_test, forestPred)
-    knnAccuracy = accuracy_score(y_test, knnPred)
+    linearAccuracy = accuracy_score(y_val, linearPred)
+    polyAccuracy = accuracy_score(y_val, polyPred)
+    rbfAccuracy = accuracy_score(y_val, rbfPred)
+    sigmoidAccuracy = accuracy_score(y_val, sigmoidPred)
+    treeAccuracy = accuracy_score(y_val, treePred)
+    forestAccuracy = accuracy_score(y_val, forestPred)
+    knnAccuracy = accuracy_score(y_val, knnPred)
+
+    print("Finished Base Models")
 
     # HyperParameters for fine tuning
-    Cs = [0.001, 0.01, 0.1, 1, 10]
-    gammas = [0.001, 0.01, 0.1, 1]
-    svcParams = {'C': Cs, 'gamma': gammas}
-    knnParams = {'knn__n_neighbors': [x % 2 == 1 for x in range(3, 99)]}
+    Cs = [0.001, 0.01, 0.1, 1, 10, 100, 1000]
+    gammas = [0.0001, 0.001, 0.01, 0.1, 1]
+    linearParams = {'C': Cs, 'gamma': gammas, 'max_iter':[10000000],'probability': [True], 'cache_size':[1000]}
+    polyParams = {'C': Cs, 'gamma': gammas, 'max_iter':[10000000],'probability': [True], 'cache_size':[1000]}
+    rbfParams = {'C': Cs, 'gamma': gammas, 'max_iter': [10000000], 'probability': [True],  'cache_size':[1000]}
+    sigmoidParams = {'C': Cs, 'gamma': gammas, 'max_iter': [10000000], 'probability': [True],  'cache_size':[1000]}
+
+    neighborRange = []
+    for x in range(5, 99):
+        if x % 2 == 1:
+            neighborRange.append(x);
+
+    knnParams = {
+        'n_neighbors': neighborRange,
+        'weights':['uniform','distance'],
+        'algorithm':['ball_tree','kd_tree','brute'],
+        'leaf_size':[10,20,30,40,50,60],
+        'p':[1,2]
+    }
 
     # Get parameters for tree,forest,knn hyperparameter tuning
     treeParams = {
         'criterion': ['gini', 'entropy'],
-        'max_depth': [4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20, 30, 40, 50, 70, 90, 120, 150]
+        'max_depth': [5,8, 10,12, 15],
+        'class_weight': ['balanced'],
+        'max_features': ['sqrt', 'log2'],
+        'min_samples_leaf': [3, 4, 5, 10, 20],
+        'min_samples_split': [5, 10, 15, 20],
     }
     forestParams = {
         'bootstrap': [True],
-        'max_depth': [80, 90, 100, 110],
-        'min_samples_leaf': [3, 4, 5],
-        'min_samples_split': [8, 10, 12],
-        'n_estimators': [100, 250, 500, 1000]
+        'max_depth': [5,8, 10,12, 15],
+        'min_samples_leaf': [3, 4, 5, 10, 20],
+        'min_samples_split': [5, 10, 15, 20],
+        'n_estimators': [150],
+        'class_weight':['balanced','balanced_subsample']
     }
 
     # Create Grid Search Models
-    linearGridSearch = GridSearchCV(sklearn.svm.SVC(kernel='linear', cache_size=1000, max_iter=10000000, probability=True), param_grid=svcParams, scoring='roc_auc',cv=5)
-    polyGridSearch = GridSearchCV(sklearn.svm.SVC(kernel='poly', cache_size=1000, max_iter=10000000, probability=True),param_grid=svcParams,scoring='roc_auc', cv=5)
-    rbfGridSearch = GridSearchCV(sklearn.svm.SVC(kernel='rbf', cache_size=1000, max_iter=10000000, probability=True),param_grid=svcParams,scoring='roc_auc', cv=5)
-    sigmoidGridSearch = GridSearchCV(sklearn.svm.SVC(kernel='sigmoid', cache_size=1000, max_iter=10000000, probability=True), param_grid=svcParams,scoring='roc_auc',cv=5)
-    treeGridSearch = GridSearchCV(DecisionTreeClassifier(), param_grid=treeParams,scoring='roc_auc', cv=5)
-    forestGridSearch = GridSearchCV(RandomForestClassifier(), param_grid=forestParams,scoring='roc_auc', cv=5)
-    knnGridSearch = GridSearchCV(KNeighborsClassifier(), param_grid=knnParams,scoring='roc_auc', cv=5)
+    linearGridSearch = GridSearchCV(sklearn.svm.SVC(kernel="linear"), param_grid=linearParams, scoring='roc_auc')
+    polyGridSearch = GridSearchCV(sklearn.svm.SVC(kernel="poly"),param_grid=polyParams,scoring='roc_auc')
+    rbfGridSearch = GridSearchCV(sklearn.svm.SVC(kernel="rbf"),param_grid=rbfParams,scoring='roc_auc')
+    sigmoidGridSearch = GridSearchCV(sklearn.svm.SVC(kernel="sigmoid"), param_grid=sigmoidParams,scoring='roc_auc')
+    treeGridSearch = GridSearchCV(DecisionTreeClassifier(), param_grid=treeParams,scoring='roc_auc')
+    forestGridSearch = GridSearchCV(RandomForestClassifier(), param_grid=forestParams,scoring='roc_auc')
+    knnGridSearch = GridSearchCV(KNeighborsClassifier(), param_grid=knnParams,scoring='roc_auc')
 
     # Fit all GridSearch Models
     linearGridSearch.fit(x_train, y_train);
     polyGridSearch.fit(x_train, y_train);
     rbfGridSearch.fit(x_train, y_train);
     sigmoidGridSearch.fit(x_train, y_train);
+    print("Finished SVC models")
     treeGridSearch.fit(x_train, y_train);
+    print("Finished Tree Grid")
     forestGridSearch.fit(x_train, y_train);
+    print("Finished Forest Grid")
     knnGridSearch.fit(x_train, y_train);
+    print("Done fitting Grid search models")
 
     # Get Predictions from all GridSearch Models
-    linearSearchPred = linearGridSearch.best_estimator_.predict(x_test);
-    polySearchPred = polyGridSearch.best_estimator_.predict(x_test);
-    rbfSearchPred = rbfGridSearch.best_estimator_.predict(x_test);
-    sigmoidSearchPred = sigmoidGridSearch.best_estimator_.predict(x_test);
-    treeSearchPred = treeGridSearch.best_estimator_.predict(x_test);
-    forestSearchPred = forestGridSearch.best_estimator_.predict(x_test);
-    knnSearchPred = knnGridSearch.best_estimator_.predict(x_test);
+    linearSearchPred = linearGridSearch.best_estimator_.predict(x_val);
+    polySearchPred = polyGridSearch.best_estimator_.predict(x_val);
+    rbfSearchPred = rbfGridSearch.best_estimator_.predict(x_val);
+    sigmoidSearchPred = sigmoidGridSearch.best_estimator_.predict(x_val);
+    treeSearchPred = treeGridSearch.best_estimator_.predict(x_val);
+    forestSearchPred = forestGridSearch.best_estimator_.predict(x_val);
+    knnSearchPred = knnGridSearch.best_estimator_.predict(x_val);
 
     # Get ROC for all GridSearch Models
-    linearSearchTN, linearSearchFP, linearSearchFN, linearSearchTP = confusion_matrix(y_test, linearSearchPred).ravel()
-    polySearchTN, polySearchFP, polySearchFN, polSearchTP = confusion_matrix(y_test, polySearchPred).ravel()
-    rbfSearchTN, rbfSearchFP, rbfSearchFN, rbSearchfTP = confusion_matrix(y_test, rbfSearchPred).ravel()
-    sigmoidSearchTN, sigmoidSearchFP, sigmoidSearchFN, sigmoidSearchTP = confusion_matrix(y_test, sigmoidSearchPred).ravel()
-    treeSearchTN, treeSearchFP, treeSearchFN, treeSearchTP = confusion_matrix(y_test, treeSearchPred).ravel()
-    forestSearchTN, forestSearchFP, forestSearchFN, forestSearchTP = confusion_matrix(y_test, forestSearchPred).ravel()
-    knnSearchTN, knnSearchFP, knnSearchFN, knnSearchTP = confusion_matrix(y_test, knnSearchPred).ravel()
+    linearSearchTN, linearSearchFP, linearSearchFN, linearSearchTP = confusion_matrix(y_val, linearSearchPred).ravel()
+    polySearchTN, polySearchFP, polySearchFN, polSearchTP = confusion_matrix(y_val, polySearchPred).ravel()
+    rbfSearchTN, rbfSearchFP, rbfSearchFN, rbSearchfTP = confusion_matrix(y_val, rbfSearchPred).ravel()
+    sigmoidSearchTN, sigmoidSearchFP, sigmoidSearchFN, sigmoidSearchTP = confusion_matrix(y_val, sigmoidSearchPred).ravel()
+    treeSearchTN, treeSearchFP, treeSearchFN, treeSearchTP = confusion_matrix(y_val, treeSearchPred).ravel()
+    forestSearchTN, forestSearchFP, forestSearchFN, forestSearchTP = confusion_matrix(y_val, forestSearchPred).ravel()
+    knnSearchTN, knnSearchFP, knnSearchFN, knnSearchTP = confusion_matrix(y_val, knnSearchPred).ravel()
 
     # Get Accuracy Scores for all GridSearch Models
-    linearSearchAccuracy = accuracy_score(y_test,linearSearchPred);
-    polySearchAccuracy = accuracy_score(y_test, polySearchPred);
-    rbfSearchAccuracy = accuracy_score(y_test, rbfSearchPred);
-    sigmoidSearchAccuracy = accuracy_score(y_test, sigmoidSearchPred);
-    treeSearchAccuracy = accuracy_score(y_test, treeSearchPred);
-    forestSearchAccuracy = accuracy_score(y_test, forestPred);
-    knnSearchAccuracy = accuracy_score(y_test, knnSearchPred);
+    linearSearchAccuracy = accuracy_score(y_val,linearSearchPred);
+    polySearchAccuracy = accuracy_score(y_val, polySearchPred);
+    rbfSearchAccuracy = accuracy_score(y_val, rbfSearchPred);
+    sigmoidSearchAccuracy = accuracy_score(y_val, sigmoidSearchPred);
+    treeSearchAccuracy = accuracy_score(y_val, treeSearchPred);
+    forestSearchAccuracy = accuracy_score(y_val, forestSearchPred);
+    knnSearchAccuracy = accuracy_score(y_val, knnSearchPred);
 
     # Get AUC scores for all GridSearch Models
     linearSearchAUC = linearGridSearch.best_score_;
@@ -348,13 +421,85 @@ def tuneModels(data):
     forestSearchAUC = forestGridSearch.best_score_;
     knnSearchAUC = knnGridSearch.best_score_;
 
-    linearRow = [data[0], linearAccuracy, np.mean(linearScores), linearTN, linearFP, linearFN, linearTP, linearSearchAccuracy,linearSearchAUC,linearSearchTN, linearSearchFP, linearSearchFN, linearSearchTP];
-    polyRow = [data[0], polyAccuracy, np.mean(polyScores), polyTN, polyFP, polyFN, polTP,polySearchAccuracy,polySearchAUC,polySearchTN, polySearchFP, polySearchFN, polSearchTP]
-    rbfRow = [data[0], rbfAccuracy, np.mean(rbfScores), rbfTN, rbfFP, rbfFN, rbfTP,rbfSearchAccuracy,rbfSearchAUC,rbfSearchTN, rbfSearchFP, rbfSearchFN, rbSearchfTP]
-    sigmoidRow = [data[0], sigmoidAccuracy, np.mean(sigmoidScores), sigmoidTN, sigmoidFP, sigmoidFN, sigmoidTP,sigmoidSearchAccuracy,sigmoidSearchAUC,sigmoidSearchTN, sigmoidSearchFP, sigmoidSearchFN, sigmoidSearchTP]
-    treeRow = [data[0], treeAccuracy, np.mean(treeScores), treeTN, treeFP, treeFN, treeTP,treeSearchAccuracy,treeSearchAUC,treeSearchTN, treeSearchFP, treeSearchFN, treeSearchTP]
-    forestRow = [data[0], forestAccuracy, np.mean(forestScores), forestTN, forestFP, forestFN, forestTP,forestSearchAccuracy,forestSearchAUC,forestSearchTN, forestSearchFP, forestSearchFN, forestSearchTP]
-    knnRow = [data[0], knnAccuracy, np.mean(knnScores), knnTN, knnFP, knnFN, knnTP,knnSearchAccuracy,knnSearchAUC,knnSearchTN, knnSearchFP, knnSearchFN, knnSearchTP]
+    #create new estimator
+    linearEstimator = SVC(**linearGridSearch.best_params_);
+    polyEstimator = SVC(**polyGridSearch.best_params_);
+    rbfEstimator = SVC(**rbfGridSearch.best_params_);
+    sigmoidEstimator = SVC(**sigmoidGridSearch.best_params_);
+    treeEstimator = DecisionTreeClassifier(**treeGridSearch.best_params_);
+    forestEstimator = RandomForestClassifier(**forestGridSearch.best_params_);
+    knnEstimator = KNeighborsClassifier(**knnGridSearch.best_params_);
+
+    #final run
+    linearEstimator.fit(x_whole_train, y_whole_train);
+    polyEstimator.fit(x_whole_train, y_whole_train);
+    rbfEstimator.fit(x_whole_train, y_whole_train);
+    sigmoidEstimator.fit(x_whole_train, y_whole_train);
+    treeEstimator.fit(x_whole_train, y_whole_train);
+    forestEstimator.fit(x_whole_train, y_whole_train);
+    knnEstimator.fit(x_whole_train, y_whole_train);
+
+    linearFinalPred = linearEstimator.predict(x_test)
+    polyFinalPred = polyEstimator.predict(x_test)
+    rbfFinalPred = rbfEstimator.predict(x_test)
+    sigmoidFinalPred = sigmoidEstimator.predict(x_test)
+    treeFinalPred = treeEstimator.predict(x_test)
+    forestFinalPred = forestEstimator.predict(x_test)
+    knnFinalPred = knnEstimator.predict(x_test)
+
+    # Get ROC for Final Run
+    linearFinalTN, linearFinalFP, linearFinalFN, linearFinalTP = confusion_matrix(y_test, linearFinalPred).ravel()
+    polyFinalTN, polyFinalFP, polyFinalFN, polyFinalTP = confusion_matrix(y_test, polyFinalPred).ravel()
+    rbfFinalTN, rbfFinalFP, rbfFinalFN, rbFinalfTP = confusion_matrix(y_test, rbfFinalPred).ravel()
+    sigmoidFinalTN, sigmoidFinalFP, sigmoidFinalFN, sigmoidFinalTP = confusion_matrix(y_test, sigmoidFinalPred).ravel()
+    treeFinalTN, treeFinalFP, treeFinalFN, treeFinalTP = confusion_matrix(y_test, treeFinalPred).ravel()
+    forestFinalTN, forestFinalFP, forestFinalFN, forestFinalTP = confusion_matrix(y_test, forestFinalPred).ravel()
+    knnFinalTN, knnFinalFP, knnFinalFN, knnFinalTP = confusion_matrix(y_test, knnFinalPred).ravel()
+
+    # Get Accuracy Scores for Final Run
+    linearFinalAccuracy = accuracy_score(y_test, linearFinalPred);
+    polyFinalAccuracy = accuracy_score(y_test, polyFinalPred);
+    rbfFinalAccuracy = accuracy_score(y_test, rbfFinalPred);
+    sigmoidFinalAccuracy = accuracy_score(y_test, sigmoidFinalPred);
+    treeFinalAccuracy = accuracy_score(y_test, treeFinalPred);
+    forestFinalAccuracy = accuracy_score(y_test, forestFinalPred);
+    knnFinalAccuracy = accuracy_score(y_test, knnFinalPred);
+
+    linearFinalAUC = roc_auc_score(y_test, linearEstimator.predict_proba(x_test)[:, 1]);
+    polyFinalAUC = roc_auc_score(y_test, polyEstimator.predict_proba(x_test)[:, 1]);
+    rbfFinalAUC = roc_auc_score(y_test, rbfEstimator.predict_proba(x_val)[:, 1]);
+    sigmoidFinalAUC = roc_auc_score(y_test, sigmoidEstimator.predict_proba(x_test)[:, 1]);
+    treeFinalAUC = roc_auc_score(y_test, treeEstimator.predict_proba(x_test)[:, 1]);
+    forestFinalAUC = roc_auc_score(y_test, forestEstimator.predict_proba(x_test)[:, 1]);
+    knnFinalAUC = roc_auc_score(y_test, knnEstimator.predict_proba(x_test)[:, 1]);
+
+    linearRow = [data[0], linearAccuracy, linearScores, linearTN, linearFP, linearFN, linearTP,
+                 linearSearchAccuracy,linearSearchAUC,linearSearchTN, linearSearchFP, linearSearchFN, linearSearchTP,
+                 linearFinalAccuracy,linearFinalAUC,linearFinalTN, linearFinalFP, linearFinalFN, linearFinalTP];
+
+    polyRow = [data[0], polyAccuracy, polyScores, polyTN, polyFP, polyFN, polTP,
+               polySearchAccuracy,polySearchAUC,polySearchTN, polySearchFP, polySearchFN, polSearchTP,
+               polyFinalAccuracy,polyFinalAUC,polyFinalTN, polyFinalFP, polyFinalFN, polyFinalTP]
+
+    rbfRow = [data[0], rbfAccuracy, rbfScores, rbfTN, rbfFP, rbfFN, rbfTP,
+              rbfSearchAccuracy,rbfSearchAUC,rbfSearchTN, rbfSearchFP, rbfSearchFN, rbSearchfTP,
+              rbfFinalAccuracy,rbfFinalAUC,rbfFinalTN, rbfFinalFP, rbfFinalFN, rbFinalfTP ]
+
+    sigmoidRow = [data[0], sigmoidAccuracy, sigmoidScores, sigmoidTN, sigmoidFP, sigmoidFN, sigmoidTP,
+                  sigmoidSearchAccuracy,sigmoidSearchAUC,sigmoidSearchTN, sigmoidSearchFP, sigmoidSearchFN, sigmoidSearchTP,
+                  sigmoidFinalAccuracy,sigmoidFinalAUC,sigmoidFinalTN, sigmoidFinalFP, sigmoidFinalFN, sigmoidFinalTP]
+
+    treeRow = [data[0], treeAccuracy, treeScores, treeTN, treeFP, treeFN, treeTP,
+               treeSearchAccuracy,treeSearchAUC,treeSearchTN, treeSearchFP, treeSearchFN, treeSearchTP,
+               treeFinalAccuracy,treeFinalAUC,treeFinalTN, treeFinalFP, treeFinalFN, treeFinalTP]
+
+    forestRow = [data[0], forestAccuracy, forestScores, forestTN, forestFP, forestFN, forestTP,
+                 forestSearchAccuracy,forestSearchAUC,forestSearchTN, forestSearchFP, forestSearchFN, forestSearchTP,
+                 forestFinalAccuracy,forestFinalAUC,forestFinalTN, forestFinalFP, forestFinalFN, forestFinalTP]
+
+    knnRow = [data[0], knnAccuracy, knnScores, knnTN, knnFP, knnFN, knnTP,
+              knnSearchAccuracy,knnSearchAUC,knnSearchTN, knnSearchFP, knnSearchFN, knnSearchTP,
+              knnFinalAccuracy,knnFinalAUC,knnFinalTN, knnFinalFP, knnFinalFN, knnFinalTP]
 
     return [linearRow, polyRow, rbfRow, sigmoidRow, treeRow, forestRow, knnRow]
 
@@ -371,30 +516,29 @@ def main():
     year1 = pd.read_excel(r'2009.xlsx', sheet_name='2009').to_numpy()
     year2 = pd.read_excel(r'2010.xlsx', sheet_name='2010').to_numpy()
 
+    target = [];
+    retention = [];
+    for i in year1:
+        if i[1] in year2[:,1]:
+            retention.append(i[1]);
+            target.append(1);
+        else:
+            target.append(0);
+
+    for i in range(0,len(year1)):
+        if year1[i,1] in year2:
+            target[i] = 1;
+
+    retentionCount= float( len(retention));
+    print( f"Remaining Customers: " + str(retentionCount));
+    print( f"Remaining Customers: " + str((retentionCount / float(len(year1)) * 100.0)) + "%");
+    print( f"New Customers: " + str( len(year2) - len(retention)) + "");
+    # Apply Preprocessing to reduce training time. Normalizes each feature to the Range [0,1]
+    scaler = MinMaxScaler();
+    dataSet = year1[:, 3:15];
+    scaler.fit(dataSet);
+
     if needsFeatureSelection:
-        target = [];
-        retention = [];
-        for i in year1:
-            if i[1] in year2[:,1]:
-                retention.append(i[1]);
-                target.append(1);
-            else:
-                target.append(0);
-
-        for i in range(0,len(year1)):
-            if year1[i,1] in year2:
-                target[i] = 1;
-
-        retentionCount= float( len(retention));
-        print( f"Remaining Customers: " + str(retentionCount));
-        print( f"Remaining Customers: " + str((retentionCount / float(len(year1)) * 100.0)) + "%");
-        print( f"New Customers: " + str( len(year2) - len(retention)) + "");
-
-        # Apply Preprocessing to reduce training time. Normalizes each feature to the Range [0,1]
-        scaler = MinMaxScaler();
-        dataSet = year1[:,3:15];
-        scaler.fit(dataSet);
-
         # Create all different combinations of the 12 features.
         permutations = [];
         for i in range(1, 4096):
@@ -458,58 +602,74 @@ def main():
         writer.save();
 
     if needsHyperTuning:
+
+        print(f'loading Cleaned Data')
+        year1 = pd.read_excel(r'2009.xlsx', sheet_name='2009').to_numpy()
+        year2 = pd.read_excel(r'2010.xlsx', sheet_name='2010').to_numpy()
+
         # Top 16 features obtained from Feature selection
-        features = ['011000111010',
-            '011000001010',
-            '011110000101',
-            '010110101010',
-            '011100001010',
-            '011000011010',
-            '010011101010',
-            '010010111010',
-            '010000111110',
-            '011111001010',
+
+        features = [
+            '100010100101',
+            '101010100101',
+            '101110100101',
+            '110110010101',
+            '100010110101',
+            '100110110101',
+            '101010110101',
+            '101110110101',
+            '100010010101',
+            '100110010101',
+            '101010010101',
+            '101110010101',
             '010001111010',
-            '011101111010',
-            '011111101010',
-            '011010111010',
-            '010000100101',
-            '011110001010'];
+            '110010010101',
+            '110100110101',
+            '111110010101'
+            ]
 
         tuningFeatures = [];
-        binaryString = "";
         for i in features:
+            binaryString = "";
             permutation = [];
-            hasFeatures = [i == '1' for i in features[i]];
-            for j in range(0,len(hasFeatures)):
+            hasFeatures = [ str(j) == '1' for j in i];
+
+            for j in range(0,12):
                 if hasFeatures[j]:
                     permutation.append(dataSet[:, j])
                     binaryString += "1"
                 else:
                     binaryString += "0"
+            permutation = normalize(permutation, axis=0, norm='max').transpose();
             tuningFeatures.append((binaryString[::-1],permutation,target));
-        print(binaryString);
 
         # run 16 threads for hyperparameter tuning
-        pool = ThreadPool(16)
-        results = pool.map(tuneModels, tuningFeatures);
-        pool.close()
-        pool.join()
+        pool = ThreadPool(16);
+        results = pool.map(tuneModelsAndGetFinalRun, tuningFeatures);
+        pool.close();
+        pool.join();
 
         names = [];
-        indices = []
-        accuracies = []
-        aucs = []
-        tn = []
-        fp = []
-        fn = []
-        tp = []
-        tunedAccuracies = []
-        tunedAUCS = []
-        tunedTN = []
-        tunedFP = []
-        tunedFN = []
-        tunedTP = []
+        indices = [];
+        accuracies = [];
+        aucs = [];
+        tn = [];
+        fp = [];
+        fn = [];
+        tp = [];
+        tunedAccuracies = [];
+        tunedAUCS = [];
+        tunedTN = [];
+        tunedFP = [];
+        tunedFN = [];
+        tunedTP = [];
+
+        finalAccuracies = [];
+        finalAUCS = [];
+        finalTN = [];
+        finalFP = [];
+        finalFN = [];
+        finalTP = [];
 
         # Convert Results to 2D numpy array
         classifierNames = ['linear','poly','rbf','sigmoid','tree','forest','knn']
@@ -530,6 +690,13 @@ def main():
                 tunedFN.append(results[i][j][11]);
                 tunedTP.append(results[i][j][12]);
 
+                finalAccuracies.append(results[i][j][13]);
+                finalAUCS.append(results[i][j][14]);
+                finalTN.append(results[i][j][15]);
+                finalFP.append(results[i][j][16]);
+                finalFN.append(results[i][j][17]);
+                finalTP.append(results[i][j][18]);
+
         newData = np.asarray( [
             np.asarray(names),
             np.asarray(indices),
@@ -544,12 +711,20 @@ def main():
             np.asarray(tunedTN),
             np.asarray(tunedFP),
             np.asarray(tunedFN),
-            np.asarray(tunedTP)
+            np.asarray(tunedTP),
+            np.asarray(finalAccuracies),
+            np.asarray(finalAUCS),
+            np.asarray(finalTN),
+            np.asarray(finalFP),
+            np.asarray(finalFN),
+            np.asarray(finalTP)
         ]);
 
         data_df = pd.DataFrame(newData.transpose())
 
-        data_df.columns = ['Classifier','Index','Accuracy','AUC','TN', 'FP','FN','TP', 'Tuned Accuracy','Tuned AUC', 'Tuned TN','TunedFP','Tuned FN','Tuned TP'];
+        data_df.columns = ['Classifier','Index','Accuracy','AUC','TN', 'FP','FN','TP',
+                           'Tuned Accuracy','Tuned AUC', 'Tuned TN','Tuned FP','Tuned FN','Tuned TP',
+                           'Final Accuracy','Final AUC','Final TN','Final FP', 'Final FN', 'Final TP'];
         writer = pd.ExcelWriter("TunedFeatures.xlsx")
         data_df.to_excel(writer, "Tuned Features", float_format='%.5f')
         writer.save();
