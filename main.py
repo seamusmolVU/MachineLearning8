@@ -2,6 +2,8 @@
 from multiprocessing.pool import ThreadPool
 import pandas as pd
 import time
+import matplotlib.pyplot as plt
+from pandas.plotting import scatter_matrix
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.neighbors import KNeighborsClassifier
@@ -13,6 +15,7 @@ import sklearn
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.preprocessing import normalize
+import seaborn as sn
 
 # This project consists of several components:
 # The project loads customers segmentation data of individual transactions and creates in return an excel sheet
@@ -162,7 +165,7 @@ def getCleanedData( yearData, fileName):
         np.asarray(customerOrderCount),
         np.asarray(customerRecency)]);
 
-    data_df = pd.DataFrame(newData.transpose())  # Key 1, Convert ndarray format to DataFrame
+    data_df = pd.DataFrame(newData.transpose())
 
     # Set the headers for the Columns.
     data_df.columns = ['CustomerID', 'Postage', 'Quantity', 'Subtotal', 'Average Quantity','Average Subtotal',
@@ -200,10 +203,10 @@ def trainModels(data):
     # Split into 60% 20% 20% training,validation,test sets
 
     # split into test and train
-    x_train, x_test, y_train, y_test = train_test_split(data[1], data[2], test_size=0.2, random_state=1)
+    x_train, x_test, y_train, y_test = train_test_split(data[1], data[2], test_size=0.20, random_state=42)
 
     # split into train and validation
-    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.25, random_state=1)
+    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.25, random_state=42)
 
     linear = SVC(kernel='linear', cache_size=1000,max_iter= 10000000, probability=True)
     poly = SVC(kernel='poly',cache_size=1000,max_iter= 10000000,probability=True)
@@ -267,8 +270,8 @@ def trainModels(data):
 def tuneModelsAndGetFinalRun(data):
     # Split data into 60% train,20% validation, 20% test
     # split into test and train
-    x_whole_train, x_test, y_whole_train, y_test = train_test_split( data[1], data[2], test_size=0.2, random_state=1)
-    x_train, x_val, y_train, y_val = train_test_split(x_whole_train, y_whole_train, test_size=0.25, random_state=1)
+    x_whole_train, x_test, y_whole_train, y_test = train_test_split( data[1], data[2], test_size=0.20, random_state=42)
+    x_train, x_val, y_train, y_val = train_test_split(x_whole_train, y_whole_train, test_size=0.25, random_state=42)
 
     # Create normal Models
     linear = SVC(kernel='linear', cache_size=1000, max_iter=10000000, probability=True)
@@ -328,13 +331,13 @@ def tuneModelsAndGetFinalRun(data):
     Cs = [0.001, 0.01, 0.1, 1, 10, 100, 1000]
     gammas = [0.0001, 0.001, 0.01, 0.1, 1]
     linearParams = {'C': Cs, 'gamma': gammas, 'max_iter':[10000000],'probability': [True], 'cache_size':[1000]}
-    polyParams = {'C': Cs, 'gamma': gammas, 'max_iter':[10000000],'probability': [True], 'cache_size':[1000]}
+    polyParams = {'C': Cs, 'gamma': gammas, 'max_iter':[10000000],'probability': [True], 'cache_size':[1000], 'degree':[2,3,4]}
     rbfParams = {'C': Cs, 'gamma': gammas, 'max_iter': [10000000], 'probability': [True],  'cache_size':[1000]}
     sigmoidParams = {'C': Cs, 'gamma': gammas, 'max_iter': [10000000], 'probability': [True],  'cache_size':[1000]}
 
     neighborRange = []
-    for x in range(5, 99):
-        if x % 2 == 1:
+    for x in range(5, 131):
+        if x % 4 == 1:
             neighborRange.append(x);
 
     knnParams = {
@@ -351,15 +354,15 @@ def tuneModelsAndGetFinalRun(data):
         'max_depth': [5,8, 10,12, 15],
         'class_weight': ['balanced'],
         'max_features': ['sqrt', 'log2'],
-        'min_samples_leaf': [3, 4, 5, 10, 20],
-        'min_samples_split': [5, 10, 15, 20],
+        'min_samples_leaf': [3, 4, 5, 10, 20,30],
+        'min_samples_split': [5, 10, 15, 20,30],
     }
     forestParams = {
         'bootstrap': [True],
-        'max_depth': [5,8, 10,12, 15],
-        'min_samples_leaf': [3, 4, 5, 10, 20],
-        'min_samples_split': [5, 10, 15, 20],
-        'n_estimators': [150],
+        'max_depth': [3, 5, 8, 10],
+        'min_samples_leaf': [3, 4, 5, 10, 20,30],
+        'min_samples_split': [5, 10, 15, 20,30],
+        'n_estimators': [150,250],
         'class_weight':['balanced','balanced_subsample']
     }
 
@@ -467,7 +470,7 @@ def tuneModelsAndGetFinalRun(data):
 
     linearFinalAUC = roc_auc_score(y_test, linearEstimator.predict_proba(x_test)[:, 1]);
     polyFinalAUC = roc_auc_score(y_test, polyEstimator.predict_proba(x_test)[:, 1]);
-    rbfFinalAUC = roc_auc_score(y_test, rbfEstimator.predict_proba(x_val)[:, 1]);
+    rbfFinalAUC = roc_auc_score(y_test, rbfEstimator.predict_proba(x_test)[:, 1]);
     sigmoidFinalAUC = roc_auc_score(y_test, sigmoidEstimator.predict_proba(x_test)[:, 1]);
     treeFinalAUC = roc_auc_score(y_test, treeEstimator.predict_proba(x_test)[:, 1]);
     forestFinalAUC = roc_auc_score(y_test, forestEstimator.predict_proba(x_test)[:, 1]);
@@ -475,38 +478,113 @@ def tuneModelsAndGetFinalRun(data):
 
     linearRow = [data[0], linearAccuracy, linearScores, linearTN, linearFP, linearFN, linearTP,
                  linearSearchAccuracy,linearSearchAUC,linearSearchTN, linearSearchFP, linearSearchFN, linearSearchTP,
-                 linearFinalAccuracy,linearFinalAUC,linearFinalTN, linearFinalFP, linearFinalFN, linearFinalTP];
+                 linearFinalAccuracy,linearFinalAUC,linearFinalTN, linearFinalFP, linearFinalFN, linearFinalTP,
+                 str(linearGridSearch.best_params_)];
 
     polyRow = [data[0], polyAccuracy, polyScores, polyTN, polyFP, polyFN, polTP,
                polySearchAccuracy,polySearchAUC,polySearchTN, polySearchFP, polySearchFN, polSearchTP,
-               polyFinalAccuracy,polyFinalAUC,polyFinalTN, polyFinalFP, polyFinalFN, polyFinalTP]
+               polyFinalAccuracy,polyFinalAUC,polyFinalTN, polyFinalFP, polyFinalFN, polyFinalTP,
+               str(polyGridSearch.best_params_)]
 
     rbfRow = [data[0], rbfAccuracy, rbfScores, rbfTN, rbfFP, rbfFN, rbfTP,
               rbfSearchAccuracy,rbfSearchAUC,rbfSearchTN, rbfSearchFP, rbfSearchFN, rbSearchfTP,
-              rbfFinalAccuracy,rbfFinalAUC,rbfFinalTN, rbfFinalFP, rbfFinalFN, rbFinalfTP ]
+              rbfFinalAccuracy,rbfFinalAUC,rbfFinalTN, rbfFinalFP, rbfFinalFN, rbFinalfTP ,
+              str(rbfGridSearch.best_params_)]
 
     sigmoidRow = [data[0], sigmoidAccuracy, sigmoidScores, sigmoidTN, sigmoidFP, sigmoidFN, sigmoidTP,
                   sigmoidSearchAccuracy,sigmoidSearchAUC,sigmoidSearchTN, sigmoidSearchFP, sigmoidSearchFN, sigmoidSearchTP,
-                  sigmoidFinalAccuracy,sigmoidFinalAUC,sigmoidFinalTN, sigmoidFinalFP, sigmoidFinalFN, sigmoidFinalTP]
+                  sigmoidFinalAccuracy,sigmoidFinalAUC,sigmoidFinalTN, sigmoidFinalFP, sigmoidFinalFN, sigmoidFinalTP,
+                  str(sigmoidGridSearch.best_params_)]
 
     treeRow = [data[0], treeAccuracy, treeScores, treeTN, treeFP, treeFN, treeTP,
                treeSearchAccuracy,treeSearchAUC,treeSearchTN, treeSearchFP, treeSearchFN, treeSearchTP,
-               treeFinalAccuracy,treeFinalAUC,treeFinalTN, treeFinalFP, treeFinalFN, treeFinalTP]
+               treeFinalAccuracy,treeFinalAUC,treeFinalTN, treeFinalFP, treeFinalFN, treeFinalTP,
+               str(treeGridSearch.best_params_)]
 
     forestRow = [data[0], forestAccuracy, forestScores, forestTN, forestFP, forestFN, forestTP,
                  forestSearchAccuracy,forestSearchAUC,forestSearchTN, forestSearchFP, forestSearchFN, forestSearchTP,
-                 forestFinalAccuracy,forestFinalAUC,forestFinalTN, forestFinalFP, forestFinalFN, forestFinalTP]
+                 forestFinalAccuracy,forestFinalAUC,forestFinalTN, forestFinalFP, forestFinalFN, forestFinalTP,
+                 str(forestGridSearch.best_params_)]
 
     knnRow = [data[0], knnAccuracy, knnScores, knnTN, knnFP, knnFN, knnTP,
               knnSearchAccuracy,knnSearchAUC,knnSearchTN, knnSearchFP, knnSearchFN, knnSearchTP,
-              knnFinalAccuracy,knnFinalAUC,knnFinalTN, knnFinalFP, knnFinalFN, knnFinalTP]
+              knnFinalAccuracy,knnFinalAUC,knnFinalTN, knnFinalFP, knnFinalFN, knnFinalTP,
+              str(knnGridSearch.best_params_)]
 
     return [linearRow, polyRow, rbfRow, sigmoidRow, treeRow, forestRow, knnRow]
 
+def plotGraphs(data,target):
+    scaler = MinMaxScaler();
+    dataSet = data[:, 3:15];
+
+    df = pd.DataFrame(dataSet, columns=['Qnt','Subtotal','Avg Qnt','Avg Subtotal', 'Avg Item Cost','Rtrn %','ReturnCost','Rtrn Qnt','Rtrn Qnt %','Rtrn Cost %','OrderCount','Recency'])
+    #df.insert(13,"Retention",target,True)
+    scatter_matrix(df, alpha=0.2, figsize=(12, 12), diagonal='kde', c= target,cmap='RdYlBu_r')
+    plt.show();
+
+    optimizedFeatures = pd.read_excel(r'TunedFeatures.xlsx', sheet_name='Tuned Features').to_numpy()
+
+    classifierNames = ['linear','poly','rbf','sigmoid','tree','forest','knn']
+    #get best models using AUC
+
+    needTrainingGraphs = True;
+    needTestingGraphs = True;
+
+    #get training confusion matrix
+    for i in range(0,7):
+        highestAUC = 0.0;
+        optimalModel = None;
+        for j in optimizedFeatures:
+            if j[1] == classifierNames[i] and highestAUC < j[16]:
+                highestAUC = j[16];
+                optimalModel = j;
+
+        print(optimalModel[0])
+
+        if needTestingGraphs:
+            array = [[int(optimalModel[20]), int(optimalModel[18])],
+                     [ int(optimalModel[19]), int(optimalModel[17])]]
+
+            df = pd.DataFrame(array, range(2), range(2))
+
+            # plt.figure(figsize=(10,7))
+            sn.set(font_scale=1.4);
+            sn.heatmap(df, annot=True, annot_kws={"size": 16},fmt='g');
+
+            plt.title(classifierNames[i] + ' Confusion Matrix');
+            plt.xticks([0.5, 1.5], labels=['True' , 'False'])
+            plt.yticks([0.5, 1.5], labels=['True', 'False'])
+            plt.xlabel('Actual');
+            plt.ylabel('Predicted')
+            plt.show()
+        if needTrainingGraphs:
+            array = [[int(optimalModel[14]), int(optimalModel[12])],
+                     [int(optimalModel[13]), int(optimalModel[11])]]
+
+            df = pd.DataFrame(array, range(2), range(2))
+
+            # plt.figure(figsize=(10,7))
+            sn.set(font_scale=1.4);
+            sn.heatmap(df, annot=True, annot_kws={"size": 16}, fmt='g');
+
+            plt.title(classifierNames[i] + ' Confusion Matrix');
+            plt.xticks([0.5, 1.5], labels=['True', 'False'])
+            plt.yticks([0.5, 1.5], labels=['True', 'False'])
+            plt.xlabel('Actual');
+            plt.ylabel('Predicted')
+            plt.show()
+
+
+
+
+
 def main():
+
+    #These
     needsDataCleaned = False;
     needsFeatureSelection = False;
-    needsHyperTuning = True;
+    needsHyperTuning = False;
+    needsGraphs = True;
 
     if needsDataCleaned:
         createCleanedModelData();
@@ -602,30 +680,27 @@ def main():
         writer.save();
 
     if needsHyperTuning:
-
         print(f'loading Cleaned Data')
         year1 = pd.read_excel(r'2009.xlsx', sheet_name='2009').to_numpy()
         year2 = pd.read_excel(r'2010.xlsx', sheet_name='2010').to_numpy()
 
         # Top 16 features obtained from Feature selection
-
-        features = [
-            '100010100101',
-            '101010100101',
-            '101110100101',
-            '110110010101',
-            '100010110101',
-            '100110110101',
-            '101010110101',
-            '101110110101',
-            '100010010101',
-            '100110010101',
-            '101010010101',
-            '101110010101',
-            '010001111010',
-            '110010010101',
+        features = [ '010110011001',
+            '110000100101',
+            '111110000101',
+            '111010010101',
             '110100110101',
-            '111110010101'
+            '110110010101',
+            '111100100101',
+            '111100010101',
+            '110100100101',
+            '111110110101',
+            '111010110101',
+            '111000010101',
+            '110100010101',
+            '111000000101',
+            '111000100101',
+            '110100000101'
             ]
 
         tuningFeatures = [];
@@ -671,6 +746,8 @@ def main():
         finalFN = [];
         finalTP = [];
 
+        optimalParameters = [];
+
         # Convert Results to 2D numpy array
         classifierNames = ['linear','poly','rbf','sigmoid','tree','forest','knn']
         for i in range(0, len(results)):
@@ -697,6 +774,8 @@ def main():
                 finalFN.append(results[i][j][17]);
                 finalTP.append(results[i][j][18]);
 
+                optimalParameters.append(results[i][j][19])
+
         newData = np.asarray( [
             np.asarray(names),
             np.asarray(indices),
@@ -717,17 +796,51 @@ def main():
             np.asarray(finalTN),
             np.asarray(finalFP),
             np.asarray(finalFN),
-            np.asarray(finalTP)
+            np.asarray(finalTP),
+            np.asarray(optimalParameters)
         ]);
 
         data_df = pd.DataFrame(newData.transpose())
 
         data_df.columns = ['Classifier','Index','Accuracy','AUC','TN', 'FP','FN','TP',
                            'Tuned Accuracy','Tuned AUC', 'Tuned TN','Tuned FP','Tuned FN','Tuned TP',
-                           'Final Accuracy','Final AUC','Final TN','Final FP', 'Final FN', 'Final TP'];
+                           'Final Accuracy','Final AUC','Final TN','Final FP', 'Final FN', 'Final TP',
+                           'optimalParameters'];
         writer = pd.ExcelWriter("TunedFeatures.xlsx")
         data_df.to_excel(writer, "Tuned Features", float_format='%.5f')
         writer.save();
+
+    if needsGraphs:
+        year1 = pd.read_excel(r'2009.xlsx', sheet_name='2009').to_numpy()
+        year2 = pd.read_excel(r'2010.xlsx', sheet_name='2010').to_numpy()
+
+        ukCount = 0;
+        target = [];
+        retention = [];
+        for i in year1:
+            if i[1] in year2[:, 1]:
+                retention.append(i[1]);
+                target.append(1);
+            else:
+                target.append(0);
+
+        for i in range(0, len(year1)):
+            if year1[i, 1] in year2:
+                target[i] = 1;
+
+            if year1[i,2] == 5:
+                ukCount = ukCount + 1;
+
+        print(ukCount)
+
+        print("Creating graphs for year1")
+        retentionCount = float(len(retention));
+        print(f"Remaining Customers: " + str(retentionCount));
+        print(f"Remaining Customers: " + str((retentionCount / float(len(year1)) * 100.0)) + "%");
+        print(f"New Customers: " + str(len(year2) - len(retention)) + "");
+        # Apply Preprocessing to reduce training time. Normalizes each feature to the Range [0,1]
+
+        plotGraphs(year1, target);
 
 
 # Press the green button in the gutter to run the script.
@@ -735,3 +848,4 @@ if __name__ == '__main__':
     main();
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
+
